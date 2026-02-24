@@ -4,7 +4,7 @@ from datetime import date
 # Configuração da página para Celular
 st.set_page_config(page_title="AsfaltoPro - Apontamento", layout="centered")
 
-# --- BANCO DE DADOS EM MEMÓRIA ---
+# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 if 'equipe' not in st.session_state:
     st.session_state.equipe = [
         "Wellington luis- Encarregado", "Vitor hugo - Apontador", "Gilvan augusto - Motorista",
@@ -24,17 +24,17 @@ if 'historico' not in st.session_state:
 if 'viagens' not in st.session_state:
     st.session_state.viagens = []
 
-# Funções de suporte
-def adicionar_viagem(peso):
-    if peso > 0:
-        st.session_state.viagens.append(peso)
-
-def limpar_tudo():
-    st.session_state.viagens = []
-    st.session_state.m2_f = 0.0
-    st.session_state.m2_a = 0.0
-    st.session_state.loc_f = ""
-    st.session_state.loc_a = ""
+# --- FUNÇÃO DE LIMPEZA CORRIGIDA ---
+def resetar_formulario():
+    # Em vez de setar os valores, limpamos as chaves para o Streamlit recriar os campos do zero
+    chaves_para_limpar = ['loc_f', 'm2_f', 'loc_a', 'm2_a', 'viagens']
+    for chave in chaves_para_limpar:
+        if chave in st.session_state:
+            if chave == 'viagens':
+                st.session_state[chave] = []
+            else:
+                del st.session_state[chave]
+    st.rerun()
 
 st.title("🚧 AsfaltoPro")
 
@@ -45,15 +45,15 @@ with aba[2]:
     st.subheader("Gerenciar Equipe e Frota")
     col_c1, col_c2 = st.columns(2)
     with col_c1:
-        nome = st.text_input("Novo Funcionário:")
+        nome_novo = st.text_input("Novo Funcionário:")
         if st.button("Adicionar Nome"):
-            st.session_state.equipe.append(nome)
-            st.success("Adicionado!")
+            st.session_state.equipe.append(nome_novo)
+            st.rerun()
     with col_c2:
-        maquina = st.text_input("Nova Máquina:")
+        maquina_nova = st.text_input("Nova Máquina:")
         if st.button("Adicionar Máquina"):
-            st.session_state.maquinas.append(maquina)
-            st.success("Adicionada!")
+            st.session_state.maquinas.append(maquina_nova)
+            st.rerun()
 
 # --- ABA 2: HISTÓRICO ---
 with aba[1]:
@@ -64,6 +64,9 @@ with aba[1]:
         for i, rel in enumerate(reversed(st.session_state.historico)):
             with st.expander(f"Relatório {rel['data']} - {rel['obra']}"):
                 st.code(rel['texto'], language="markdown")
+        if st.button("🗑️ Limpar Todo Histórico"):
+            st.session_state.historico = []
+            st.rerun()
 
 # --- ABA 1: LANÇAMENTO ---
 with aba[0]:
@@ -88,22 +91,15 @@ with aba[0]:
     st.subheader("🚛 Controle de Massa (Viagens)")
     
     col_v1, col_v2 = st.columns([2, 1])
-    peso_nfe = col_v1.number_input("Peso da Nota (Toneladas)", min_value=0.0, step=0.01, format="%.2f")
+    peso_nfe = col_v1.number_input("Peso da Nota (Toneladas)", min_value=0.0, step=0.01)
     if col_v2.button("➕ Adicionar"):
-        adicionar_viagem(peso_nfe)
+        if peso_nfe > 0:
+            st.session_state.viagens.append(peso_nfe)
+            st.rerun()
     
-    if st.session_state.viagens:
-        total_ton = sum(st.session_state.viagens)
-        st.info(f"🚚 **Total Acumulado:** {total_ton:.2f} ton | **Viagens:** {len(st.session_state.viagens)}")
-        with st.expander("Ver detalhes das viagens"):
-            for i, v in enumerate(st.session_state.viagens, 1):
-                st.write(f"Viagem {i}: {v:.2f} ton")
-            if st.button("Limpar Viagens"):
-                st.session_state.viagens = []
-                st.rerun()
-    else:
-        total_ton = 0.0
-
+    total_ton = sum(st.session_state.viagens)
+    st.info(f"🚚 **Total Acumulado:** {total_ton:.2f} ton | **Viagens:** {len(st.session_state.viagens)}")
+    
     st.divider()
     st.subheader("🏗️ Aplicação (Capa)")
     loc_a = st.text_input("Local da Aplicação", key="loc_a")
@@ -114,8 +110,7 @@ with aba[0]:
     col_b1, col_b2 = st.columns(2)
     
     if col_b1.button("💾 GERAR E SALVAR"):
-        # Geração do texto formatado
-        texto_relatorio = f"""RELATÓRIO DIÁRIO\n\nDATA: {data_obra.strftime('%d.%m.%Y')}\nOBRA: {obra.upper()}\nCLIMA: {clima}\n\n---\nEQUIPE DE APOIO\n"""
+        texto_relatorio = f"RELATÓRIO DIÁRIO\n\nDATA: {data_obra.strftime('%d.%m.%Y')}\nOBRA: {obra.upper()}\nCLIMA: {clima}\n\n---\nEQUIPE DE APOIO\n"
         for i, func in enumerate(presenca, 1):
             texto_relatorio += f"\n{i}. {func}"
         
@@ -129,11 +124,8 @@ with aba[0]:
             texto_relatorio += f"\n- {m}"
         
         st.session_state.historico.append({"data": data_obra.strftime('%d/%m/%Y'), "obra": obra, "texto": texto_relatorio})
-        
         st.subheader("✅ Relatório Gerado!")
         st.code(texto_relatorio, language="markdown")
-        st.success("Copiado com sucesso! (Toque e segure para copiar)")
 
     if col_b2.button("♻️ NOVO DIA (LIMPAR)"):
-        limpar_tudo()
-        st.rerun()
+        resetar_formulario()
