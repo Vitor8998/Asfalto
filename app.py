@@ -1,147 +1,167 @@
-import streamlit as st
-from datetime import date
+import customtkinter as ctk
+from tkinter import messagebox, ttk
+from datetime import datetime, timedelta
+import urllib.parse
+import webbrowser
+import json
+import os
 
-# Configuração da página e Estilo Visual Professional
-st.set_page_config(page_title="AsfaltoPro Professional", layout="centered")
+# Configuração base do tema
+ctk.set_appearance_mode("light")
 
-# CSS para design profissional
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button {
-        width: 100%;
-        border-radius: 10px;
-        height: 3em;
-        background-color: #FFC107;
-        color: black;
-        font-weight: bold;
-        border: none;
-    }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+class AppBarbearia(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-# --- INICIALIZAÇÃO DE DADOS ---
-if 'equipe_lista' not in st.session_state:
-    st.session_state.equipe_lista = [
-        "Wellington luis- Encarregado", "Vitor hugo - Apontador", "Gilvan augusto - Motorista",
-        "Claudinei brito jr. - Motorista", "Eduardo cruz - Op. De máquina", "Zenilton brito - Aux. De acabadora",
-        "Erenilson santos - Op. De máquina", "Claudinei brito - Op. De máquina", "Ismar vicente - Op. De máquina",
-        "Julio cesar - Rasteleiro", "Jhonatan kawalan - Rasteleiro", "Wagner nogueira - Ajd. Geral",
-        "Elias silva - Ajd. Geral", "Laercio manoel - Ajd. Geral", "Wellington rodrigues - Ajd. Geral",
-        "Israel - Op. De máquina", "Luan silveira - Op. De máquina", "Luan borges - Rasteleiro", "Alex rocha - Rasteleiro"
-    ]
-if 'maquinas_lista' not in st.session_state:
-    st.session_state.maquinas_lista = [
-        "VAN - TKP4H02", "CARRETA - IEU2A98", "PLATAFORMA - GHZ2H26", "BOBCAT", 
-        "ROLO PNEU", "ROLO CHAPA", "VIBROACABADORA", "CA/ ESPARGIDOR - TIX6G72"
-    ]
+        self.title("Golden Cut - Sistema de Agendamento")
+        self.geometry("1000x650")
+        self.configure(fg_color="#FFFFFF") # Fundo Branco
 
-if 'viagens' not in st.session_state: st.session_state.viagens = []
-if 'historico' not in st.session_state: st.session_state.historico = []
-
-# --- FUNÇÃO DE LIMPEZA ---
-def resetar_dia():
-    for c in ['loc_f', 'm2_f', 'loc_a', 'm2_a', 'viagens', 'temp_equipe', 'temp_frota', 'obs', 'p_nfe']:
-        if c in st.session_state:
-            if c == 'viagens': st.session_state[c] = []
-            else: del st.session_state[c]
-    st.rerun()
-
-# --- TÍTULO ---
-st.markdown("<h1 style='text-align: center; color: #333;'>🏗️ ASFALTO<span style='color: #FFC107;'>PRO</span></h1>", unsafe_allow_html=True)
-
-aba = st.tabs(["🚀 Lançamento", "📂 Histórico", "⚙️ Cadastros"])
-
-# --- ABA 3: CADASTROS (CORRIGIDA) ---
-with aba[2]:
-    st.subheader("👥 Equipe & Frota")
-    
-    # Adicionar Funcionário
-    c_f1, c_f2 = st.columns([3,1])
-    n_f = c_f1.text_input("Novo Nome:", key="input_novo_f")
-    if c_f2.button("Add", key="btn_add_f") and n_f:
-        st.session_state.equipe_lista.append(n_f)
-        st.rerun()
-            
-    with st.expander("Gerenciar Equipe (Excluir)"):
-        # Criamos uma cópia para iterar sem erro de mutação
-        for i, nome in enumerate(list(st.session_state.equipe_lista)):
-            col_n, col_d = st.columns([5,1])
-            col_n.write(f"• {nome}")
-            if col_d.button("🗑️", key=f"del_f_{i}"):
-                st.session_state.equipe_lista.pop(i)
-                st.rerun()
-
-# --- ABA 2: HISTÓRICO ---
-with aba[1]:
-    st.subheader("📅 Relatórios Salvos")
-    if not st.session_state.historico:
-        st.info("Nenhum registro encontrado.")
-    else:
-        for idx, r in enumerate(reversed(st.session_state.historico)):
-            with st.expander(f"📌 {r['data']} - {r['obra']}"):
-                st.code(r['texto'])
-        if st.button("🗑️ Limpar Todo Histórico"):
-            st.session_state.historico = []
-            st.rerun()
-
-# --- ABA 1: LANÇAMENTO ---
-with aba[0]:
-    if st.button("⚡ SELECIONAR EQUIPE COMPLETA"):
-        st.session_state.temp_equipe = st.session_state.equipe_lista
-        st.session_state.temp_frota = st.session_state.maquinas_lista
-        st.rerun()
-
-    with st.container():
-        c1, c2 = st.columns(2)
-        data_obra = c1.date_input("🗓️ Data", date.today())
-        clima = c2.selectbox("🌤️ Clima", ["BOM", "NUBLADO", "CHUVA", "INSTÁVEL"])
-        obra = st.text_input("📍 Obra", "POÁVIAS/RODOBASE - DIADEMA")
-
-    st.markdown("### 👷 Recursos")
-    sel_equipe = st.multiselect("Funcionários", sorted(st.session_state.equipe_lista), default=st.session_state.get('temp_equipe', []))
-    sel_frota = st.multiselect("Equipamentos", sorted(st.session_state.maquinas_lista), default=st.session_state.get('temp_frota', []))
-
-    st.divider()
-    st.markdown("### 🚚 Recebimento de Massa")
-    v_col1, v_col2 = st.columns([2,1])
-    p_nfe = v_col1.number_input("Peso da Nota (Ton)", step=0.01, key="p_nfe")
-    if v_col2.button("➕ ADICIONAR"):
-        if p_nfe > 0:
-            st.session_state.viagens.append(p_nfe)
-            st.rerun()
-    
-    total_ton = sum(st.session_state.viagens)
-    mc1, mc2 = st.columns(2)
-    mc1.metric("Total Toneladas", f"{total_ton:.2f} t")
-    mc2.metric("Nº de Viagens", len(st.session_state.viagens))
-
-    st.divider()
-    st.markdown("### 📏 Produção")
-    loc_a = st.text_input("Trecho/Rua", "Av. Corredor Abd", key="loc_a")
-    col_p1, col_p2 = st.columns(2)
-    m2_a = col_p1.number_input("Área Aplicação (m²)", step=0.01, key="m2_a")
-    m2_f = col_p2.number_input("Área Fresagem (m²)", step=0.01, key="m2_f")
-    
-    obs = st.text_area("🗒️ Observações", key="obs")
-
-    st.divider()
-    if st.button("✅ GERAR RELATÓRIO"):
-        rel = f"""RELATÓRIO DIÁRIO\n\nDATA: {data_obra.strftime('%d.%m.%Y')}\nOBRA: {obra.upper()}\nCLIMA: {clima}\n\n---\nEQUIPE DE APOIO:"""
-        for i, f in enumerate(sel_equipe, 1): rel += f"\n{i}. {f}"
-        rel += f"\n\n---\nPRODUÇÃO:\n● {loc_a}\nTOTAL M²: {m2_a:,.2f}\nFRESAGEM: {m2_f:,.2f} M²\nTOTAL TON: {total_ton:,.2f}\nVIAGENS: {len(st.session_state.viagens)}"
-        rel += f"\n\nEQUIPAMENTOS:"
-        for m in sel_frota: rel += f"\n- {m}"
-        if obs: rel += f"\n\nOBS: {obs}"
+        # Paleta de Cores
+        self.color_gold = "#D4AF37"
+        self.color_black = "#1A1A1A"
+        self.color_white = "#FFFFFF"
         
-        st.session_state.historico.append({"data": data_obra.strftime('%d/%m'), "obra": obra, "texto": rel})
-        st.code(rel)
+        self.agendamentos = self.carregar_dados()
 
-    if st.button("♻️ NOVO DIA (LIMPAR)"):
-        resetar_dia()
+        self.setup_ui()
+
+    def setup_ui(self):
+        # --- Painel Lateral (Formulário) ---
+        self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=self.color_white, border_width=2, border_color=self.color_gold)
+        self.sidebar.pack(side="left", fill="y", padx=10, pady=10)
+
+        self.logo_label = ctk.CTkLabel(self.sidebar, text="GOLDEN CUT", font=ctk.CTkFont(size=28, weight="bold"), text_color=self.color_gold)
+        self.logo_label.pack(pady=(30, 20))
+
+        # Campos
+        self.criar_campo("Nome do Cliente:", "entry_nome")
+        self.criar_campo("Telefone (com DDD):", "entry_telefone", placeholder="Ex: 11999999999")
+        self.criar_campo("Data (DD/MM/AAAA):", "entry_data", valor_padrao=datetime.now().strftime("%d/%m/%Y"))
+        self.criar_campo("Horário (HH:MM):", "entry_hora", placeholder="Ex: 14:30")
+
+        self.btn_agendar = ctk.CTkButton(self.sidebar, text="AGENDAR (45 MIN)", fg_color=self.color_gold, 
+                                        text_color=self.color_black, hover_color="#B8860B", 
+                                        font=ctk.CTkFont(weight="bold", size=14),
+                                        command=self.adicionar_agendamento)
+        self.btn_agendar.pack(fill="x", padx=20, pady=25)
+
+        # --- Área Principal (Tabela) ---
+        self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+
+        self.title_list = ctk.CTkLabel(self.main_frame, text="Próximos Atendimentos", 
+                                      font=ctk.CTkFont(size=22, weight="bold"), text_color=self.color_black)
+        self.title_list.pack(pady=(10, 20))
+
+        # Configuração da Tabela
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview.Heading", font=('Arial', 10, 'bold'), background=self.color_gold, foreground=self.color_black)
+        style.configure("Treeview", background=self.color_white, fieldbackground=self.color_white, foreground=self.color_black, rowheight=35)
+        style.map("Treeview", background=[('selected', '#F0E6D2')]) # Dourado claro ao selecionar
+
+        self.tree = ttk.Treeview(self.main_frame, columns=("Cliente", "Telefone", "Data", "Início", "Fim"), show='headings')
+        self.tree.heading("Cliente", text="CLIENTE")
+        self.tree.heading("Telefone", text="TELEFONE")
+        self.tree.heading("Data", text="DATA")
+        self.tree.heading("Início", text="INÍCIO")
+        self.tree.heading("Fim", text="FIM")
+        
+        self.tree.column("Telefone", width=120)
+        self.tree.column("Data", width=100)
+        self.tree.column("Início", width=80)
+        self.tree.column("Fim", width=80)
+        self.tree.pack(fill="both", expand=True)
+
+        # Botão de WhatsApp
+        self.btn_wpp = ctk.CTkButton(self.main_frame, text="ENVIAR LEMBRETE VIA WHATSAPP", 
+                                     fg_color=self.color_black, text_color=self.color_gold, 
+                                     hover_color="#333333", font=ctk.CTkFont(weight="bold"),
+                                     command=self.enviar_whatsapp)
+        self.btn_wpp.pack(pady=20, fill="x")
+        
+        self.atualizar_tabela()
+
+    def criar_campo(self, texto_label, nome_atributo, valor_padrao="", placeholder=""):
+        label = ctk.CTkLabel(self.sidebar, text=texto_label, text_color=self.color_black, font=ctk.CTkFont(weight="bold"))
+        label.pack(padx=20, anchor="w", pady=(10, 0))
+        entry = ctk.CTkEntry(self.sidebar, fg_color=self.color_white, text_color=self.color_black, border_color=self.color_gold, placeholder_text=placeholder)
+        if valor_padrao:
+            entry.insert(0, valor_padrao)
+        entry.pack(fill="x", padx=20, pady=(2, 0))
+        setattr(self, nome_atributo, entry)
+
+    def adicionar_agendamento(self):
+        nome = self.entry_nome.get().strip()
+        telefone = self.entry_telefone.get().strip()
+        data_str = self.entry_data.get().strip()
+        hora_str = self.entry_hora.get().strip()
+
+        if not nome or not telefone or not data_str or not hora_str:
+            messagebox.showwarning("Aviso", "Preencha todos os campos!")
+            return
+
+        try:
+            inicio = datetime.strptime(f"{data_str} {hora_str}", "%d/%m/%Y %H:%M")
+            fim = inicio + timedelta(minutes=45)
+            
+            # Evita chocar horários
+            for ag in self.agendamentos:
+                ag_inicio = datetime.strptime(f"{ag['data']} {ag['inicio']}", "%d/%m/%Y %H:%M")
+                ag_fim = datetime.strptime(f"{ag['data']} {ag['fim']}", "%d/%m/%Y %H:%M")
+                
+                if (inicio < ag_fim and fim > ag_inicio):
+                    messagebox.showerror("Erro", "Horário indisponível! Conflito com outro cliente.")
+                    return
+
+            novo_ag = {"cliente": nome, "telefone": telefone, "data": data_str, "inicio": hora_str, "fim": fim.strftime("%H:%M")}
+            self.agendamentos.append(novo_ag)
+            self.salvar_dados()
+            self.atualizar_tabela()
+            
+            self.entry_nome.delete(0, 'end')
+            self.entry_telefone.delete(0, 'end')
+            self.entry_hora.delete(0, 'end')
+            messagebox.showinfo("Sucesso", f"Atendimento de {nome} marcado com sucesso!")
+
+        except ValueError:
+            messagebox.showerror("Erro", "Formato de data (DD/MM/AAAA) ou hora (HH:MM) inválido!")
+
+    def atualizar_tabela(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        self.agendamentos.sort(key=lambda x: datetime.strptime(f"{x['data']} {x['inicio']}", "%d/%m/%Y %H:%M"))
+        for ag in self.agendamentos:
+            self.tree.insert("", "end", values=(ag['cliente'], ag['telefone'], ag['data'], ag['inicio'], ag['fim']))
+
+    def enviar_whatsapp(self):
+        selecionado = self.tree.selection()
+        if not selecionado:
+            messagebox.showwarning("Aviso", "Selecione um cliente na tabela primeiro.")
+            return
+        
+        valores = self.tree.item(selecionado[0], "values")
+        nome, telefone, data, inicio = valores[0], valores[1], valores[2], valores[3]
+        
+        telefone_formatado = ''.join(filter(str.isdigit, telefone))
+        mensagem = f"Olá {nome}! Passando para confirmar seu horário na Golden Cut amanhã, {data} às {inicio}. Te aguardamos!"
+        mensagem_url = urllib.parse.quote(mensagem)
+        
+        link = f"https://api.whatsapp.com/send?phone=55{telefone_formatado}&text={mensagem_url}"
+        webbrowser.open(link)
+
+    def salvar_dados(self):
+        with open("agenda_barbearia.json", "w", encoding="utf-8") as f:
+            json.dump(self.agendamentos, f, ensure_ascii=False, indent=4)
+
+    def carregar_dados(self):
+        if os.path.exists("agenda_barbearia.json"):
+            with open("agenda_barbearia.json", "r", encoding="utf-8") as f:
+                return json.load(f)
+        return []
+
+if __name__ == "__main__":
+    app = AppBarbearia()
+    app.mainloop()
